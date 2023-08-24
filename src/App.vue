@@ -35,6 +35,7 @@
               <input
                 v-model="ticker"
                 @keydown.enter="add"
+                @input="handleInput"
                 type="text"
                 name="wallet"
                 id="wallet"
@@ -43,33 +44,29 @@
               />
             </div>
             <div
+              v-if="ticker"
               class="flex bg-white shadow-md p-1 rounded-md shadow-md flex-wrap"
             >
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                BTC
-              </span>
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                DOGE
-              </span>
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                BCH
-              </span>
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                CHD
-              </span>
+              <template v-for="(coin, idx) in filteredCoins" :key="coin.Id">
+                <span
+                  v-if="idx < 4"
+                  @click="
+                    handleChoice(coin.Id);
+                    add();
+                  "
+                  class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
+                >
+                  {{ coin.Symbol }}
+                </span>
+              </template>
             </div>
-            <div class="text-sm text-red-600">Такой тикер уже добавлен</div>
+            <div v-if="error" class="text-sm text-red-600">
+              Такой тикер уже добавлен
+            </div>
           </div>
         </div>
         <button
+          @click="add"
           type="button"
           class="my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
         >
@@ -185,10 +182,22 @@ export default {
       tickers: [],
       sel: null,
       graph: [],
+      coins: [],
+      error: false,
+      filteredCoins: [],
     };
+  },
+  created() {
+    this.fetchData();
   },
   methods: {
     add() {
+      const isTickerAdded = this.tickers.findIndex(
+        (t) => t.name === this.ticker
+      );
+      if (this.tickers.length > 0 && isTickerAdded >= 0) {
+        return (this.error = true);
+      }
       const currentTicker = { name: this.ticker, price: "-" };
       this.tickers.push(currentTicker);
       setInterval(async () => {
@@ -196,17 +205,18 @@ export default {
           `https://min-api.cryptocompare.com/data/price?fsym=${currentTicker.name}&tsyms=USD&api_key=682fa5b1e1925ad5cf40a921dcf15b7aa9e224ceee7d934a8ebc6164081e0b1f`
         );
         const data = await f.json();
-        console.log(data);
         this.tickers.find((t) => t.name === currentTicker.name).price =
           data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
         if (this.sel?.name === currentTicker.name) {
           this.graph.push(data.USD);
         }
       }, 5000);
+      console.log(this.tickers)
       this.ticker = "";
     },
     handleDelete(tickerToRemove) {
       this.tickers = this.tickers.filter((t) => t !== tickerToRemove);
+      console.log(this.tickers)
     },
     normalizeGraph() {
       const maxValue = Math.max(...this.graph);
@@ -218,6 +228,28 @@ export default {
     select(ticker) {
       this.sel = ticker;
       this.graph = [];
+    },
+    async fetchData() {
+      try {
+        const res = await fetch(
+          "https://min-api.cryptocompare.com/data/all/coinlist?summary=true"
+        );
+        const data = await res.json();
+        this.coins = Object.values(data.Data);
+      } catch (error) {
+        console.error("Помилка при завантаженні даних:", error);
+      }
+    },
+    handleInput() {
+      this.filteredCoins = this.coins.filter((coin) =>
+        coin.Symbol.toLowerCase().includes(this.ticker.toLowerCase())
+      );
+      if (!this.ticker) this.error = false;
+    },
+    handleChoice(coinId) {
+      this.ticker = this.filteredCoins.find(
+        (coin) => coin.Id === coinId
+      ).Symbol;
     },
   },
 };
